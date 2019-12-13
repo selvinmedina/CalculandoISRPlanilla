@@ -975,7 +975,7 @@ namespace ERP_GMEDINA.Controllers
                                         TimeSpan diferencia = anioActualEnero - fechaIngresoEmpleado;
 
                                         if(TimeSpan.Zero > diferencia)
-                                            entroEsteAnio = true;
+                                            esMensual = true;
 
                                         //Saber que mes entro
                                         int mes = fechaIngresoEmpleado.Month;
