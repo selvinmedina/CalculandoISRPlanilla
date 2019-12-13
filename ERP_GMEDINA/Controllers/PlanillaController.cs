@@ -963,30 +963,31 @@ namespace ERP_GMEDINA.Controllers
                                         var datosIngresoEmpleado = db.tbHistorialDePago.Where(x => x.emp_Id == empleadoActual.emp_Id && x.hipa_Anio == anioActualEnero.Year).Select(x => new { sueldoNeto = x.hipa_SueldoNeto, mes = x.hipa_Mes }).ToList();
 
                                         //Obtener los pagos mensuales totales
-                                        var mesesPago = db.tbHistorialDePago
+                                        var mesesPago = (db.tbHistorialDePago
                                             .Where(x => x.emp_Id == empleadoActual.emp_Id && x.hipa_Anio == anioActualEnero.Year)
-                                            .GroupBy(x => x.hipa_Mes).Select(x => x.Sum(y => y.hipa_SueldoNeto));
+                                            .OrderBy(x => x.hipa_Mes)
+                                            .GroupBy(x => x.hipa_Mes).Select(x => x.Sum(y => (Decimal)y.hipa_SueldoNeto))).ToList();
 
 
                                         DateTime fechaIngresoEmpleado = db.tbEmpleados.Where(x => x.emp_Id == empleadoActual.emp_Id).Select(x => x.emp_Fechaingreso).FirstOrDefault();
+                                        bool esMensual = false;
 
-                                        if (anioActualEnero >= fechaIngresoEmpleado)
+                                        TimeSpan diferencia = anioActualEnero - fechaIngresoEmpleado;
+
+                                        if(TimeSpan.Zero > diferencia)
                                             entroEsteAnio = true;
 
-                                        if (entroEsteAnio)
-                                        {
-                                            //Saber que mes entro
-                                            int mes = fechaIngresoEmpleado.Month;
+                                        //Saber que mes entro
+                                        int mes = fechaIngresoEmpleado.Month;
+                                        decimal SalarioPromedioAnualPagadoAlAnio = 0;
+                                        decimal salarioPromedioAnualPagadoAlMes = 0;
+                                        decimal totalSalarioAnual = SalarioPromedioAnualISR(netoAPagarColaborador,
+                                            ref SueldoAnualISR,
+                                            mesesPago,
+                                            esMensual,
+                                            ref SalarioPromedioAnualPagadoAlAnio,
+                                            ref salarioPromedioAnualPagadoAlMes);
 
-                                            //Si es el primer mes a cobrar
-                                            if (datosIngresoEmpleado == null)
-                                                SueldoAnualISR = ((netoAPagarColaborador * 12) / 12) ?? 0;
-
-                                            foreach (var item in datosIngresoEmpleado)
-                                            {
-                                                item
-                                            }
-                                        }
                                         #endregion
 
                                         #region crear registro de la planilla del colaborador para el reporte
@@ -1206,6 +1207,38 @@ namespace ERP_GMEDINA.Controllers
             }
             //retornar resultado al cliente
             return Json(new { Data = reporte, Response = response }, JsonRequestBehavior.AllowGet);
+        }
+
+        private static decimal SalarioPromedioAnualISR(decimal? netoAPagarColaborador, ref decimal SueldoAnualISR, List<decimal> mesesPago, bool esMensual, ref decimal SalarioPromedioAnualPagadoAlAnio, ref decimal salarioPromedioAnualPagadoAlMes)
+        {
+            if (esMensual)
+            {
+                //Si es el primer mes a cobrar
+                if (mesesPago == null)
+                    SueldoAnualISR = ((netoAPagarColaborador * 12) / 12) ?? 0;
+
+                int cantidadMesesPagados = mesesPago.Count;
+
+                decimal promedioMesesPago = mesesPago.Average();
+
+                decimal sueldoProyeccion = 0;
+
+                //Sacar el sueldo de los meses restantes
+                for (int i = cantidadMesesPagados; i <= 12; i++)
+                {
+                    sueldoProyeccion += promedioMesesPago;
+                }
+
+                salarioPromedioAnualPagadoAlMes = mesesPago.Sum() + sueldoProyeccion;
+            }
+            else
+            {
+                if (DateTime.Now.Month == 12)
+                    //Calcular todas las fechas de este año, aunque haya entrado 
+                    SalarioPromedioAnualPagadoAlAnio = mesesPago.Sum();
+            }
+
+            return (salarioPromedioAnualPagadoAlMes > 0) ? salarioPromedioAnualPagadoAlMes : SalarioPromedioAnualPagadoAlAnio;
         }
 
         protected override void Dispose(bool disposing)
